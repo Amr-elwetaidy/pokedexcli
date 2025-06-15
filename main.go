@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -250,6 +252,47 @@ func strPtr(s string) *string {
 }
 
 func main() {
+	// check if we're in a pipe
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// if we're getting piped input, run in non-interactive mode
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		scanner := bufio.NewScanner(os.Stdin)
+		state := initialReplState()
+		commands := getCommands()
+		for scanner.Scan() {
+			line := scanner.Text()
+			words := cleanInput(line)
+			if len(words) == 0 {
+				continue
+			}
+			commandName := words[0]
+			args := words[1:]
+			if command, ok := commands[commandName]; ok {
+				out, err := command.callback(state, args)
+				if err != nil {
+					if errors.Is(err, ErrExit) {
+						return
+					}
+					fmt.Fprintln(os.Stderr, "error:", err)
+					continue
+				}
+				if out != "" {
+					fmt.Println(out)
+				}
+			} else {
+				fmt.Fprintln(os.Stderr, "unknown command:", commandName)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
