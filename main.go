@@ -28,6 +28,7 @@ type model struct {
 	history      []string
 	historyIndex int
 	ready        bool
+	content      string // Store the full content history
 }
 
 func initialModel() model {
@@ -39,7 +40,8 @@ func initialModel() model {
 
 	// We'll set the viewport size later in the update loop
 	vp := viewport.New(0, 0)
-	vp.SetContent(titleStyle.Render("Welcome to the Pokedex!") + "\nType 'help' for a list of commands.")
+	initialContent := titleStyle.Render("Welcome to the Pokedex!") + "\nType 'help' for a list of commands."
+	vp.SetContent(initialContent)
 
 	return model{
 		textInput:    ti,
@@ -48,6 +50,7 @@ func initialModel() model {
 		commands:     getCommands(),
 		history:      []string{},
 		historyIndex: 0,
+		content:      initialContent,
 	}
 }
 
@@ -123,19 +126,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			command, exists := m.commands[commandName]
 			if !exists {
-				m.viewport.SetContent(errorStyle.Render(fmt.Sprintf("Unknown command: %s", commandName)))
+				// Append unknown command error to content history
+				if m.content != "" && !strings.HasSuffix(m.content, "\n") {
+					m.content += "\n"
+				}
+				m.content += fmt.Sprintf("> %s\n", input)
+				m.content += errorStyle.Render(fmt.Sprintf("Unknown command: %s", commandName))
+				m.viewport.SetContent(m.content)
+				m.viewport.GotoBottom()
 				break
 			}
+
+			// Append the command to the content history
+			if m.content != "" && !strings.HasSuffix(m.content, "\n") {
+				m.content += "\n"
+			}
+			m.content += fmt.Sprintf("> %s\n", input)
 
 			output, err := command.callback(m.replState, args)
 			if err != nil {
 				if errors.Is(err, ErrExit) {
 					return m, tea.Quit
 				}
-				m.viewport.SetContent(errorStyle.Render(fmt.Sprintf("Error: %v", err)))
+				m.content += errorStyle.Render(fmt.Sprintf("Error: %v", err))
 			} else {
-				m.viewport.SetContent(output)
+				m.content += output
 			}
+
+			m.viewport.SetContent(m.content)
 			m.viewport.GotoBottom()
 			// Return here to prevent the key press from being sent to other components.
 			return m, nil
@@ -167,13 +185,6 @@ func (m model) View() string {
 	)
 }
 
-func main() {
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseAllMotion())
-	if _, err := p.Run(); err != nil {
-		log.Fatal(err)
-	}
-}
-
 func cleanInput(text string) []string {
 	lowercase := strings.ToLower(text)
 	words := strings.Fields(lowercase)
@@ -185,7 +196,8 @@ func initialReplState() *replState {
 		config: &pokeapi.Config{
 			Next: strPtr("https://pokeapi.co/api/v2/location-area/"),
 		},
-		cache: pokecache.NewCache(10 * time.Second),
+		cache:   pokecache.NewCache(10 * time.Second),
+		pokedex: make(map[string]pokeapi.Pokemon),
 	}
 }
 
@@ -206,6 +218,16 @@ func getCommands() map[string]cliCommand {
 			description: "Lists the pokemon in a given location area",
 			callback:    commandExplore,
 		},
+		"catch": {
+			name:        "catch <pokemon_name>",
+			description: "Attempt to catch a pokemon and add it to your pokedex",
+			callback:    commandCatch,
+		},
+		"inspect": {
+			name:        "inspect <pokemon_name>",
+			description: "View details about a caught pokemon",
+			callback:    commandInspect,
+		},
 		"exit": {
 			name:        "exit",
 			description: "Exit the Pokedex",
@@ -225,4 +247,11 @@ func getCommands() map[string]cliCommand {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func main() {
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseAllMotion())
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
+	}
 }

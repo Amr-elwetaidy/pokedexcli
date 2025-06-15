@@ -12,6 +12,7 @@ type cliCommand struct {
 }
 
 type replState struct {
-	config *pokeapi.Config
-	cache  *pokecache.Cache
+	config  *pokeapi.Config
+	cache   *pokecache.Cache
+	pokedex map[string]pokeapi.Pokemon
 }
