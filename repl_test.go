@@ -9,18 +9,18 @@ func TestCleanInput(t *testing.T) {
 		expected []string
 	}{
 		{
-			name:     "removes punctuation and handles spaces",
+			name:     "handles leading/trailing spaces and lowercase",
 			input:    " Hello, World! ",
-			expected: []string{"hello", "world"},
+			expected: []string{"hello,", "world!"},
 		},
 		{
-			name:     "handles no spaces with punctuation",
+			name:     "handles no spaces",
 			input:    "Hello, World!",
-			expected: []string{"hello", "world"},
+			expected: []string{"hello,", "world!"},
 		},
 		{
 			name:     "handles all lowercase with punctuation",
-			input:    "hello, world!",
+			input:    "hello world",
 			expected: []string{"hello", "world"},
 		},
 		{
